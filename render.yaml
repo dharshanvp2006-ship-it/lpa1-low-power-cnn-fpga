@@ -1,0 +1,37 @@
+# Render Blueprint — LPA-1 low-power CNN accelerator report site
+# Static site (HTML/CSS/JS, no build step) served from Render's global CDN.
+#
+# Note: `healthCheckPath` and `region` are intentionally omitted.
+# Render supports `healthCheckPath` for web services only, and static sites
+# are served from a global CDN rather than a single region.
+
+services:
+  - type: web
+    name: lpa1-low-power-cnn-fpga
+    runtime: static
+    # No build step: the site is committed as-is. An empty command is a valid no-op.
+    buildCommand: ""
+    staticPublishPath: ./
+    autoDeployTrigger: commit
+    envVars:
+      # Nothing to install — keeps the build deterministic and fast.
+      - key: SKIP_INSTALL_DEPS
+        value: "true"
+    headers:
+      # Hashed/immutable assets and the stylesheet can be cached hard; the HTML
+      # must revalidate so a new commit is picked up on the next visit.
+      - path: /*
+        name: X-Content-Type-Options
+        value: nosniff
+      - path: /*
+        name: Referrer-Policy
+        value: strict-origin-when-cross-origin
+      - path: /*
+        name: X-Frame-Options
+        value: SAMEORIGIN
+      - path: /*
+        name: Cache-Control
+        value: public, max-age=0, must-revalidate
+      - path: /favicon.svg
+        name: Cache-Control
+        value: public, max-age=86400

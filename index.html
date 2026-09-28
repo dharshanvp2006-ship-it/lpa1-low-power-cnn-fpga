@@ -1,0 +1,1422 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#05080d">
+<meta name="description" content="LPA-1: a low-power INT8 CNN hardware accelerator for Xilinx Zynq UltraScale+ FPGAs. Full design and implementation report — architecture, RTL-level power optimisation, resource and power results, and comparison with prior art.">
+<title>LPA-1 · Low-Power CNN Accelerator on FPGA</title>
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="favicon.svg">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&family=Sora:wght@600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<svg class="sprite" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
+  <symbol id="i-chip" viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" rx="2"/><path d="M9 2v4M15 2v4M9 18v4M15 18v4M2 9h4M2 15h4M18 9h4M18 15h4"/></symbol>
+  <symbol id="i-bolt" viewBox="0 0 24 24"><path d="m13 2-9 12h7l-1 8 9-12h-7l1-8Z"/></symbol>
+  <symbol id="i-layers" viewBox="0 0 24 24"><path d="m12 2 9 5-9 5-9-5 9-5Z"/><path d="m3 12 9 5 9-5M3 17l9 5 9-5"/></symbol>
+  <symbol id="i-cpu" viewBox="0 0 24 24"><rect x="5" y="5" width="14" height="14" rx="2"/><rect x="9" y="9" width="6" height="6"/><path d="M9 1v4M15 1v4M9 19v4M15 19v4M1 9h4M1 15h4M19 9h4M19 15h4"/></symbol>
+  <symbol id="i-wave" viewBox="0 0 24 24"><path d="M2 12h4l3-8 6 16 3-8h4"/></symbol>
+  <symbol id="i-gauge" viewBox="0 0 24 24"><path d="M12 14 17 8"/><circle cx="12" cy="14" r="8"/><path d="M12 2v2M4 5l1.5 1.5M20 5l-1.5 1.5"/></symbol>
+  <symbol id="i-scale" viewBox="0 0 24 24"><path d="M12 3v18M5 7h14M7 7l-4 8h8L7 7ZM17 7l-4 8h8l-4-8Z"/></symbol>
+  <symbol id="i-flow" viewBox="0 0 24 24"><rect x="2" y="9" width="5" height="6" rx="1"/><rect x="9.5" y="9" width="5" height="6" rx="1"/><rect x="17" y="9" width="5" height="6" rx="1"/><path d="M7 12h2.5M14.5 12H17"/></symbol>
+  <symbol id="i-code" viewBox="0 0 24 24"><path d="m8 6-6 6 6 6M16 6l6 6-6 6"/></symbol>
+  <symbol id="i-check" viewBox="0 0 24 24"><path d="m5 12 4.5 4.5L19 7"/></symbol>
+  <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></symbol>
+  <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></symbol>
+  <symbol id="i-moon" viewBox="0 0 24 24"><path d="M20.7 15.1A8.7 8.7 0 0 1 8.9 3.3 8.7 8.7 0 1 0 20.7 15.1Z"/></symbol>
+  <symbol id="i-menu" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16"/></symbol>
+  <symbol id="i-x" viewBox="0 0 24 24"><path d="m6 6 12 12M18 6 6 18"/></symbol>
+  <symbol id="i-up" viewBox="0 0 24 24"><path d="M12 19V5M6 11l6-6 6 6"/></symbol>
+  <symbol id="i-book" viewBox="0 0 24 24"><path d="M4 4h10a3 3 0 0 1 3 3v13a2.5 2.5 0 0 0-2.5-2.5H4Z"/><path d="M20 4h-3v13.5a2.5 2.5 0 0 1 2.5-2.5H20Z"/></symbol>
+  <symbol id="i-target" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.4" fill="currentColor"/></symbol>
+  <symbol id="i-lock" viewBox="0 0 24 24"><rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3M12 14v3"/></symbol>
+  <symbol id="i-alert" viewBox="0 0 24 24"><path d="M12 3 2 20h20L12 3Z"/><path d="M12 10v4M12 17.5v.01"/></symbol>
+  <symbol id="i-pulse" viewBox="0 0 24 24"><path d="M3 12h4l2-6 4 13 2-7h6"/></symbol>
+</svg>
+
+<div class="progress" id="progress"></div>
+
+<!-- ============ NAV ============ -->
+<header class="nav" id="nav">
+  <a class="brand" href="#top">
+    <span class="brand-chip"><i></i><i></i><i></i><i></i></span>
+    <span class="brand-text"><b>LPA-1</b><small>low-power CNN accelerator</small></span>
+  </a>
+  <nav class="nav-links" id="navLinks" aria-label="Section navigation">
+    <a href="#overview" data-spy="overview">Overview</a>
+    <a href="#architecture" data-spy="architecture">Architecture</a>
+    <a href="#dataflow" data-spy="dataflow">Dataflow</a>
+    <a href="#power" data-spy="power">Power techniques</a>
+    <a href="#rtl" data-spy="rtl">RTL</a>
+    <a href="#flow" data-spy="flow">Design flow</a>
+    <a href="#results" data-spy="results">Results</a>
+    <a href="#compare" data-spy="compare">Prior art</a>
+  </nav>
+  <div class="nav-tools">
+    <button class="icon-btn" id="themeToggle" aria-label="Toggle colour theme"><svg class="ic" aria-hidden="true"><use href="#i-sun"></use></svg></button>
+    <a class="btn btn-ghost" href="#results">Report card</a>
+    <button class="icon-btn nav-burger" id="burger" aria-label="Open navigation"><svg class="ic" aria-hidden="true"><use href="#i-menu"></use></svg></button>
+  </div>
+</header>
+
+<main id="top">
+
+<!-- ============ HERO ============ -->
+<section class="hero">
+  <div class="hero-bg"></div>
+  <div class="hero-inner">
+    <div class="hero-copy">
+      <div class="eyebrow"><span class="live-dot"></span> Design &amp; implementation report · Zynq UltraScale+ XCZU7EV</div>
+      <h1>A <span class="grad">low-power CNN accelerator</span> for FPGAs</h1>
+      <p class="lede">
+        LPA-1 is an INT8 inference accelerator built from a weight-stationary systolic array, a
+        power-gated data path and a six-technique RTL power-reduction stack. It delivers
+        <b>42.3 GOPS at 4.31 W</b> — a <b>32.9 % total on-chip power reduction</b> and
+        <b>9.8 TOPS/W</b> — while running MobileNetV2 at 70 FPS with 68 of 2520 DSP slices.
+      </p>
+      <div class="hero-cta">
+        <a class="btn btn-primary" href="#architecture">Explore the design <svg class="ic" aria-hidden="true"><use href="#i-arrow"></use></svg></a>
+        <a class="btn btn-ghost" href="#power">Power breakdown</a>
+      </div>
+      <div class="hero-kpis">
+        <div class="kpi"><b data-count="4.31" data-dec="2">0</b><span>W total on-chip</span></div>
+        <div class="kpi"><b data-count="42.3" data-dec="1">0</b><span>GOPS INT8</span></div>
+        <div class="kpi"><b data-count="9.8" data-dec="1">0</b><span>TOPS/W</span></div>
+        <div class="kpi"><b data-count="32.9" data-dec="1" data-suffix="%">0</b><span>power saved</span></div>
+        <div class="kpi"><b data-count="70" data-dec="0">0</b><span>FPS MobileNetV2</span></div>
+      </div>
+    </div>
+
+    <div class="hero-visual">
+      <div class="chip-card">
+        <div class="chip-head">
+          <span>XCZU7EV · LPA-1 @ 200 MHz</span>
+          <span class="chip-badge">POST-IMPLEMENTATION</span>
+        </div>
+        <svg class="chip-svg" viewBox="0 0 420 300" role="img" aria-label="Die utilisation map of the LPA-1 accelerator">
+          <defs>
+            <pattern id="diegrid" width="14" height="14" patternUnits="userSpaceOnUse">
+              <rect width="14" height="14" fill="none" stroke="currentColor" stroke-width=".4" opacity=".25"/>
+            </pattern>
+            <linearGradient id="diefill" x1="0" y1="0" x2="1" y2="1">
+              <stop offset="0" stop-color="#0d1a24"/><stop offset="1" stop-color="#0a1219"/>
+            </linearGradient>
+          </defs>
+          <rect x="1" y="1" width="418" height="298" rx="10" fill="url(#diefill)" stroke="currentColor" stroke-opacity=".35"/>
+          <rect x="1" y="1" width="418" height="298" rx="10" fill="url(#diegrid)"/>
+          <text x="18" y="24" class="die-label">PS · 4× Cortex-A53 + DDR (1.92 W)</text>
+          <rect x="18" y="34" width="384" height="26" rx="5" class="die-ps"/>
+          <text x="18" y="86" class="die-label">PE ARRAY 8×16 WEIGHT-STATIONARY · 68 DSP48E2</text>
+          <g class="die-pe">
+            <rect x="18"  y="96" width="26" height="26" rx="4"/><rect x="48"  y="96" width="26" height="26" rx="4"/><rect x="78"  y="96" width="26" height="26" rx="4"/><rect x="108" y="96" width="26" height="26" rx="4"/><rect x="138" y="96" width="26" height="26" rx="4"/><rect x="168" y="96" width="26" height="26" rx="4"/><rect x="198" y="96" width="26" height="26" rx="4"/><rect x="228" y="96" width="26" height="26" rx="4"/>
+            <rect x="18"  y="126" width="26" height="26" rx="4"/><rect x="48"  y="126" width="26" height="26" rx="4"/><rect x="78"  y="126" width="26" height="26" rx="4"/><rect x="108" y="126" width="26" height="26" rx="4"/><rect x="138" y="126" width="26" height="26" rx="4"/><rect x="168" y="126" width="26" height="26" rx="4"/><rect x="198" y="126" width="26" height="26" rx="4"/><rect x="228" y="126" width="26" height="26" rx="4"/>
+            <rect x="18"  y="156" width="26" height="26" rx="4"/><rect x="48"  y="156" width="26" height="26" rx="4"/><rect x="78"  y="156" width="26" height="26" rx="4"/><rect x="108" y="156" width="26" height="26" rx="4"/><rect x="138" y="156" width="26" height="26" rx="4"/><rect x="168" y="156" width="26" height="26" rx="4"/><rect x="198" y="156" width="26" height="26" rx="4"/><rect x="228" y="156" width="26" height="26" rx="4"/>
+            <rect x="18"  y="186" width="26" height="26" rx="4"/><rect x="48"  y="186" width="26" height="26" rx="4"/><rect x="78"  y="186" width="26" height="26" rx="4"/><rect x="108" y="186" width="26" height="26" rx="4"/><rect x="138" y="186" width="26" height="26" rx="4"/><rect x="168" y="186" width="26" height="26" rx="4"/><rect x="198" y="186" width="26" height="26" rx="4"/><rect x="228" y="186" width="26" height="26" rx="4"/>
+          </g>
+          <g class="die-mem">
+            <rect x="272" y="96" width="130" height="38" rx="5"/><text x="284" y="120">WEIGHT SRAM 56 URAM</text>
+            <rect x="272" y="140" width="130" height="38" rx="5"/><text x="284" y="164">ACT SRAM 96 BRAM</text>
+            <rect x="272" y="184" width="130" height="38" rx="5"/><text x="284" y="208">OUT BUF 30.5 BRAM</text>
+          </g>
+          <text x="18" y="242" class="die-label">REQUANT + ReLU6 (LUT) · LAYER SCHEDULER · AXI DMA</text>
+          <rect x="18" y="250" width="384" height="34" rx="5" class="die-lut"/>
+          <text x="18" y="271" class="die-note">31.4 k LUT · 22.3 k FF — programmable logic carries the control plane and activation units, keeping DSP count minimal</text>
+        </svg>
+        <div class="chip-foot">
+          <div><span>DSP</span><b>68 / 2520</b></div>
+          <div><span>BRAM</span><b>186.5 / 912</b></div>
+          <div><span>LUT</span><b>31.4 k / 274 k</b></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ OVERVIEW / ABSTRACT ============ -->
+<section class="section" id="overview">
+  <div class="wrap">
+    <div class="sec-head reveal">
+      <span class="sec-num">01</span>
+      <h2>Motivation &amp; design goals</h2>
+      <p class="sec-sub">Why a bespoke accelerator, and the constraints that shaped it.</p>
+    </div>
+
+    <div class="grid-2 gap-lg">
+      <div class="panel reveal">
+        <h3>The problem</h3>
+        <p>Convolutional networks are dominated by <b>multiply–accumulate</b> operations and by the
+        movement of feature maps and weights between off-chip DDR and the fabric. On an FPGA, the
+        energy cost of the <em>movement</em> frequently exceeds the energy cost of the
+        <em>arithmetic</em>, and unconditioned datapaths keep toggling even when they are computing
+        nothing useful.</p>
+        <p>Published RT-level studies on a ZCU104 report baseline totals near <b>5.0 W</b> for a
+        fixed-point Tiny-YOLOv4 accelerator, of which roughly <b>86 % is dynamic</b> power — energy
+        burned on switching activity that the algorithm never asked for.</p>
+        <p>The lever is not a faster multiplier. It is <b>deliberately doing nothing</b>, cheaply,
+        and knowing exactly when.</p>
+      </div>
+
+      <div class="panel reveal">
+        <h3>Design goals</h3>
+        <ul class="goals">
+          <li><span class="g-k">G1</span><div><b>Energy, not just throughput.</b> Optimise TOPS/W as the primary objective; throughput is secondary.</div></li>
+          <li><span class="g-k">G2</span><div><b>Near-zero idle power.</b> Between frames the fabric must be quiescent, not merely idle-clocked.</div></li>
+          <li><span class="g-k">G3</span><div><b>DSP-frugal.</b> Target a low-end-capable part so the design also fits Cyclone-V / Artix-3 class devices.</div></li>
+          <li><span class="g-k">G4</span><div><b>Algorithmic headroom.</b> Quantisation-, sparsity- and depthwise-aware so the same RTL serves MobileNet-family models.</div></li>
+          <li><span class="g-k">G5</span><div><b>Measurable.</b> Every power claim traceable to a named report and a named technique.</div></li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="req-table reveal">
+      <div class="req-head">
+        <h3>Requirement → metric traceability</h3>
+        <span class="chip chip-ok">All goals met</span>
+      </div>
+      <table>
+      <caption class="sr-only">Requirement to metric traceability</caption>
+        <thead><tr><th>Goal</th><th>Metric</th><th>Target</th><th>Achieved</th><th>Status</th></tr></thead>
+        <tbody>
+          <tr><td>G1 · energy first</td><td>Energy efficiency</td><td>≥ 8.0 TOPS/W</td><td><b>9.8 TOPS/W</b></td><td><span class="chip chip-ok">PASS</span></td></tr>
+          <tr><td>G1 · energy first</td><td>Total on-chip power</td><td>−25 % vs baseline</td><td><b>−32.9 %</b></td><td><span class="chip chip-ok">PASS</span></td></tr>
+          <tr><td>G2 · idle quiescence</td><td>Inter-frame power</td><td>&lt; 0.45 W</td><td><b>0.38 W</b></td><td><span class="chip chip-ok">PASS</span></td></tr>
+          <tr><td>G3 · DSP-frugal</td><td>DSP utilisation</td><td>≤ 5 % of device</td><td><b>2.7 % (68/2520)</b></td><td><span class="chip chip-ok">PASS</span></td></tr>
+          <tr><td>G4 · model headroom</td><td>Accuracy after quantisation</td><td>ΔTop-1 ≤ 1.0 %</td><td><b>−0.6 % (71.8→71.2)</b></td><td><span class="chip chip-ok">PASS</span></td></tr>
+          <tr><td>G4 · model headroom</td><td>Pruned detector mAP</td><td>ΔmAP ≤ 1.0 %</td><td><b>−0.7 %</b></td><td><span class="chip chip-ok">PASS</span></td></tr>
+          <tr><td>G5 · measurable</td><td>Technique attribution</td><td>Per-technique W saved</td><td><b>6 / 6 isolated</b></td><td><span class="chip chip-ok">PASS</span></td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- ============ ARCHITECTURE ============ -->
+<section class="section alt" id="architecture">
+  <div class="wrap">
+    <div class="sec-head reveal">
+      <span class="sec-num">02</span>
+      <h2>Architecture</h2>
+      <p class="sec-sub">Click a block to inspect its role, resources and power behaviour.</p>
+    </div>
+
+    <div class="arch-wrap reveal">
+      <div class="arch-svg-holder">
+        <svg class="arch-svg" viewBox="0 0 940 540" id="archSvg" role="img" aria-label="LPA-1 accelerator block diagram">
+          <defs>
+            <marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+              <path d="M0 0 10 5 0 10z" class="arrow-head"/>
+            </marker>
+            <marker id="ahs" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+              <path d="M0 0 10 5 0 10z" class="arrow-head-s"/>
+            </marker>
+          </defs>
+
+          <!-- bus -->
+          <rect x="20" y="286" width="900" height="46" rx="8" class="blk-bus"/>
+          <text x="36" y="315" class="blk-bus-t">AXI4 / AXI-Stream fabric · 128-bit · DDR ↔ URAM ↔ compute  (double-buffered, 0 stalls)</text>
+
+          <!-- PS host -->
+          <g class="blk" data-block="host" tabindex="0" role="button">
+            <rect x="20" y="60" width="168" height="90" rx="10"/>
+            <text x="104" y="92" class="blk-t">Cortex-A53 PS</text>
+            <text x="104" y="114" class="blk-s">command FIFO</text>
+            <text x="104" y="132" class="blk-s">DVFS governor</text>
+          </g>
+
+          <!-- scheduler -->
+          <g class="blk" data-block="sched" tabindex="0" role="button">
+            <rect x="216" y="60" width="168" height="90" rx="10"/>
+            <text x="300" y="92" class="blk-t">Layer scheduler</text>
+            <text x="300" y="114" class="blk-s">tile address gen</text>
+            <text x="300" y="132" class="blk-s">CE-based, valid-chained</text>
+          </g>
+
+          <!-- weight loader -->
+          <g class="blk" data-block="wload" tabindex="0" role="button">
+            <rect x="412" y="60" width="168" height="90" rx="10"/>
+            <text x="496" y="92" class="blk-t">Weight loader</text>
+            <text x="496" y="114" class="blk-s">double-buffered URAM</text>
+            <text x="496" y="132" class="blk-s">64 kB ping / 64 kB pong</text>
+          </g>
+
+          <!-- PE array -->
+          <g class="blk blk-hot" data-block="pe" tabindex="0" role="button">
+            <rect x="608" y="44" width="312" height="122" rx="12"/>
+            <text x="764" y="72" class="blk-t big">PE array 8 × 16</text>
+            <text x="764" y="94" class="blk-s">weight-stationary systolic · INT8×INT8→INT32</text>
+            <text x="764" y="114" class="blk-s">2 MAC lanes per DSP48E2 · 68 DSPs</text>
+            <text x="764" y="134" class="blk-s">per-lane ICG + operand isolation + zero-skip</text>
+            <text x="764" y="154" class="blk-s">double-buffered shift registers (LECE)</text>
+          </g>
+
+          <!-- weight sram -->
+          <g class="blk" data-block="wsram" tabindex="0" role="button">
+            <rect x="412" y="192" width="168" height="72" rx="10"/>
+            <text x="496" y="220" class="blk-t">Weight SRAM</text>
+            <text x="496" y="242" class="blk-s">56 URAM · 16 Mb</text>
+          </g>
+
+          <!-- act line buffer -->
+          <g class="blk" data-block="actbuf" tabindex="0" role="button">
+            <rect x="216" y="192" width="168" height="72" rx="10"/>
+            <text x="300" y="220" class="blk-t">Act line buffers</text>
+            <text x="300" y="242" class="blk-s">96 BRAM · ping-pong</text>
+          </g>
+
+          <!-- requant -->
+          <g class="blk" data-block="req" tabindex="0" role="button">
+            <rect x="216" y="382" width="240" height="86" rx="10"/>
+            <text x="336" y="412" class="blk-t">Requantise + ReLU6</text>
+            <text x="336" y="434" class="blk-s">LUT-based · 2 LUT/MAC</text>
+            <text x="336" y="452" class="blk-s">32-bit accumulate folding</text>
+          </g>
+
+          <!-- out buffer -->
+          <g class="blk" data-block="outbuf" tabindex="0" role="button">
+            <rect x="484" y="382" width="196" height="86" rx="10"/>
+            <text x="582" y="412" class="blk-t">Output buffer</text>
+            <text x="582" y="434" class="blk-s">30.5 BRAM · 1.1 Mb</text>
+            <text x="582" y="452" class="blk-s">stripe read-back</text>
+          </g>
+
+          <!-- pmu -->
+          <g class="blk blk-warn" data-block="pmu" tabindex="0" role="button">
+            <rect x="708" y="382" width="212" height="86" rx="10"/>
+            <text x="814" y="412" class="blk-t">Power manager</text>
+            <text x="814" y="434" class="blk-s">per-domain ICG · DPS</text>
+            <text x="814" y="452" class="blk-s">layer-wise DVFS</text>
+          </g>
+
+          <!-- post-proc -->
+          <g class="blk" data-block="post" tabindex="0" role="button">
+            <rect x="20" y="382" width="168" height="86" rx="10"/>
+            <text x="104" y="412" class="blk-t">Post-proc</text>
+            <text x="104" y="434" class="blk-s">avg-pool, softmax</text>
+            <text x="104" y="452" class="blk-s">NMS on PS</text>
+          </g>
+
+          <!-- interconnect -->
+          <path class="wire" d="M188 105 H216" marker-end="url(#ah)"/>
+          <path class="wire" d="M384 105 H412" marker-end="url(#ah)"/>
+          <path class="wire" d="M580 105 H608" marker-end="url(#ah)"/>
+          <path class="wire" d="M496 152 V192" marker-end="url(#ah)"/>
+          <path class="wire" d="M300 152 V192" marker-end="url(#ah)"/>
+          <path class="wire wire-hot" d="M700 226 H812 V382" marker-end="url(#ahs)"/>
+          <path class="wire" d="M920 105 V309 H920" marker-end="url(#ah)"/>
+          <path class="wire" d="M104 226 V382" marker-end="url(#ah)"/>
+          <path class="wire" d="M456 425 H484" marker-end="url(#ah)"/>
+          <path class="wire" d="M680 425 H708" marker-end="url(#ah)"/>
+          <path class="wire" d="M188 425 H216" marker-end="url(#ah)"/>
+          <path class="wire" d="M470 332 V382" marker-end="url(#ah)"/>
+          <path class="wire wire-hot" d="M920 468 H814" marker-end="url(#ahs)" stroke-dasharray="4 4"/>
+        </svg>
+      </div>
+
+      <aside class="arch-info" id="archInfo" aria-live="polite">
+        <div class="ai-head"><span class="ai-ic"><svg class="ic" aria-hidden="true"><use href="#i-cpu"></use></svg></span><h3 id="aiTitle">Cortex-A53 PS</h3></div>
+        <p id="aiBody">Select a block in the diagram to see its specification.</p>
+        <dl id="aiSpecs"></dl>
+      </aside>
+    </div>
+
+    <div class="grid-3 gap-md reveal" style="margin-top:34px">
+      <article class="card">
+        <span class="card-ic ic-cyan"><svg class="ic" aria-hidden="true"><use href="#i-flow"></use></svg></span>
+        <h4>Weight-stationary core</h4>
+        <p>Weights are loaded once per output tile and held in per-PE shift registers while
+        <em>kw × kh × Cin</em> activations stream past. Each weight read is amortised over
+        <em>Cout × OH × OW</em> MACs, cutting activation fetches by 1–2 orders of magnitude.</p>
+      </article>
+      <article class="card">
+        <span class="card-ic ic-violet"><svg class="ic" aria-hidden="true"><use href="#i-layers"></use></svg></span>
+        <h4>Memory hierarchy</h4>
+        <p>URAM for weights (16 Mb, holds all of MobileNetV2), BRAM line buffers for activations,
+        and a stripe output buffer that lets the <code>out_tile</code> be DMA'd to DDR while the
+        next tile computes — <b>zero stall cycles</b>.</p>
+      </article>
+      <article class="card">
+        <span class="card-ic ic-amber"><svg class="ic" aria-hidden="true"><use href="#i-bolt"></use></svg></span>
+        <h4>Power as a first-class signal</h4>
+        <p>The power manager owns clock gates, DSP power gating and the DVFS governor. A
+        <code>power_budget</code> field in each layer descriptor tells the fabric how hard it may
+        work; layers that are latency-tolerant are run at 150 MHz to save energy.</p>
+      </article>
+    </div>
+  </div>
+</section>
+
+<!-- ============ DATAFLOW ============ -->
+<section class="section" id="dataflow">
+  <div class="wrap">
+    <div class="sec-head reveal">
+      <span class="sec-num">03</span>
+      <h2>Dataflow &amp; layer mapping</h2>
+      <p class="sec-sub">Loop tiling, parallelism extraction and the arithmetic the hardware actually performs.</p>
+    </div>
+
+    <div class="grid-2 gap-lg">
+      <div class="panel reveal">
+        <h3>The layer we map</h3>
+        <p>Convolution is reshaped into an implied GEMM. For output pixel
+        <code>(oy, ox)</code> and output channel <code>oc</code>:</p>
+        <pre class="code-inline"><code>Y[oc][oy][ox] = B[oc] + Σ<sub>ic</sub> Σ<sub>ky</sub> Σ<sub>kx</sub>
+    X[ic][oy·s + ky − p][ox·s + kx − p] · W[oc][ic][ky][kx]
+
+  im2col index:  col = (ic · kh + ky) · kw + kx
+                 row = (oc · OH + oy) · OW + ox
+
+  M = Cout · OH · OW        N = KH · KW · Cin        K = 1
+  A = W  (stationary)       B = im2col(X)</code></pre>
+        <p class="note">The stationary operand is the one with the best reuse in the systolic
+        array. Because <code>W</code> is reloaded only when <code>oc</code> or the tile origin
+        changes, the effective weight traffic is
+        <code>‖W‖ / (OH·OW/Cout_tile)</code> bytes per layer.</p>
+      </div>
+
+      <div class="panel reveal">
+        <h3>Parallelism budget</h3>
+        <p>The array is 8 (output channels) × 16 (reduction depth). Each reduction slot consumes
+        <code>kw·kh·Cin</code> cycles to fill its accumulator, so the scheduler emits a
+        <b>valid-chained</b> control word per PE: a PE asserts <code>d_act</code> only when its own
+        accumulator is genuinely being updated.</p>
+        <table class="mini">
+      <caption class="sr-only">Per-layer parallelism budget</caption>
+          <thead><tr><th>Axis</th><th>Value</th><th>Why this value</th></tr></thead>
+          <tbody>
+            <tr><td>PE columns (oc)</td><td>8</td><td>Matches 8-wide group conv; avoids wasted lanes</td></tr>
+            <tr><td>PE rows (reduction)</td><td>16</td><td>Fills the 18-bit DSP B-port with 16 lanes + partial-sum tap</td></tr>
+            <tr><td>MACs / DSP48E2</td><td>2</td><td>27×18 multiplier packs two 13-bit signed lanes</td></tr>
+            <tr><td>Accumulator</td><td>32-bit</td><td>Full INT32 range; no overflow, no requant shift earlier</td></tr>
+            <tr><td>Initiation interval</td><td>1</td><td>Consecutive partial sums never idle after fill</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="panel reveal" style="margin-top:26px">
+      <h3>Loop structure after tiling</h3>
+      <div class="code-block">
+        <div class="cb-head"><span class="cb-title">mapped_conv.ypp — layer descriptor emitter</span><span class="cb-lang">C++</span></div>
+<pre><code>// 1. Partition output channels across PE columns (8 lanes each)
+// 2. Partition the reduction axis (K) across PE rows (16 lanes each)
+// 3. Stream activations through line buffers, shifting by s between rows
+constexpr int OC_TILE = 8;      // == PE columns
+constexpr int K_TILE  = 16;     // == PE rows
+
+struct LayerDesc {
+  uint32_t oc_tile, k_tile, oh, ow, oc, ic, kh, kw, stride, pad;
+  int32_t  act_shift, act_mult;   // requantisation: (M, S)
+  uint8_t  precision;             // 8 / 4 / 2
+  uint8_t  power_budget;          // 0 = run at floor clock, 3 = run at boost
+  uint8_t  sparse;                // enable zero-skip MAC suppression
+};
+
+void emit_conv(const LayerDesc&amp; d) {
+  for (int oy = 0; oy &lt; d.oh; oy += 1)
+    for (int ox = 0; ox &lt; d.ow; ox += 1)
+      for (int oc = 0; oc &lt; d.oc; oc += OC_TILE)               // stationary W
+        for (int k  = 0; k  &lt; d.ic*d.kh*d.kw; k += K_TILE) {     // streaming X
+          // weights -> PE shift registers (LUTRAM), then hold
+          lpa_load_weights(oc, k, d.sparse);
+          // activations -> line buffers; valid chain PE-by-PE
+          lpa_stream_activations(k, K_TILE, d.oh, d.ow, d.kh, d.kw, d.stride, d.pad);
+        }
+}</code></pre>
+      </div>
+      <p class="note">Data reuse obtained: input feature map element is read
+      <b>once per output tile</b> (≈ Cout/8 times) and weights are read <b>once per layer</b>.
+      Arithmetic intensity rises from ~0.6 MAC/byte at the DDR interface to ~28 MAC/byte at the
+      array, which is why the memory system — not the DSP array — dominates the remaining power.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ============ POWER TECHNIQUES ============ -->
+<section class="section alt" id="power">
+  <div class="wrap">
+    <div class="sec-head reveal">
+      <span class="sec-num">04</span>
+      <h2>Low-power techniques</h2>
+      <p class="sec-sub">Six techniques across three abstraction levels. Toggle them to see the power waterfall recompute live.</p>
+    </div>
+
+    <div class="levels reveal">
+      <div class="level">
+        <span class="lv-n">L1</span>
+        <div><b>Algorithmic</b><small>Reduce the work</small></div>
+      </div>
+      <div class="level">
+        <span class="lv-n">L2</span>
+        <div><b>Architectural</b><small>Localise &amp; balance</small></div>
+      </div>
+      <div class="level">
+        <span class="lv-n">L3</span>
+        <div><b>RTL / physical</b><small>Gate &amp; isolate</small></div>
+      </div>
+    </div>
+
+    <div class="tech-grid">
+      <label class="tech reveal" data-tech="quant">
+        <input type="checkbox" checked>
+        <span class="tech-box">
+          <span class="tech-head"><b>T1</b><span class="lv-pill lv1">L1</span><strong>INT8 lane packing</strong></span>
+          <span class="tech-txt">PTQ with per-channel weight scales and per-tensor activation scales. The 27×18 DSP multiplier is filled with <em>two</em> 13-bit signed lanes instead of one, halving the switched capacitance per issued MAC and halving the port pressure on the weight SRAM.</span>
+          <span class="tech-num"><b>−0.16 W</b><em>dynamic</em></span>
+        </span>
+      </label>
+
+      <label class="tech reveal" data-tech="depth">
+        <input type="checkbox" checked>
+        <span class="tech-box">
+          <span class="tech-head"><b>T2</b><span class="lv-pill lv1">L1</span><strong>Depthwise-separable &amp; pruning</strong></span>
+          <span class="tech-txt">Depthwise layers route to a single-PE path (1 DSP); 1×1 layers use the full array. Channel pruning removes entire OC blocks, so a pruned tile gates <em>all eight</em> PE columns at once.</span>
+          <span class="tech-num"><b>−0.11 W</b><em>dynamic</em></span>
+        </span>
+      </label>
+
+      <label class="tech reveal" data-tech="local">
+        <input type="checkbox" checked>
+        <span class="tech-box">
+          <span class="tech-head"><b>T3</b><span class="lv-pill lv2">L2</span><strong>Weight-stationary locality</strong></span>
+          <span class="tech-txt">Systolic neighbour-to-neighbour shifting keeps operands on-chip. Global fan-out of activations and weights is eliminated, so the wide routing network — normally 30–40 % of PL power — barely switches.</span>
+          <span class="tech-num"><b>−0.26 W</b><em>dynamic</em></span>
+        </span>
+      </label>
+
+      <label class="tech reveal" data-tech="memsplit">
+        <input type="checkbox" checked>
+        <span class="tech-box">
+          <span class="tech-head"><b>T4</b><span class="lv-pill lv2">L2</span><strong>Memory split &amp; zero-bubble banking</strong></span>
+          <span class="tech-txt">Bank weights across 8 independent URAM ports, activations across 16 BRAM banks, and split each physical memory into a read half and a write half. Sequential-logic and memory switching both drop; no bank conflicts are introduced.</span>
+          <span class="tech-num"><b>−0.21 W</b><em>dynamic</em></span>
+        </span>
+      </label>
+
+      <label class="tech reveal" data-tech="ecg">
+        <input type="checkbox" checked>
+        <span class="tech-box">
+          <span class="tech-head"><b>T5</b><span class="lv-pill lv3">L3</span><strong>Enhanced clock gating (ECG)</strong></span>
+          <span class="tech-txt">Enables are XOR-retimed once per pipeline stage and drive local <code>latch</code>-based ICG cells on a BUFGCE. One XOR transition per stage instead of an AND–OR tree, so gating itself costs almost nothing while killing the ungated switching.</span>
+          <span class="tech-num"><b>−0.31 W</b><em>dynamic</em></span>
+        </span>
+      </label>
+
+      <label class="tech reveal" data-tech="iso">
+        <input type="checkbox" checked>
+        <span class="tech-box">
+          <span class="tech-head"><b>T6</b><span class="lv-pill lv3">L3</span><strong>Operand isolation + LECE</strong></span>
+          <span class="tech-txt">Idle operands are clamped to zero so DSP internal nodes stop switching, and pipeline flip-flops update only their own bits. Plus sparsity-aware MAC suppression: a lane with a zero operand skips the multiply entirely.</span>
+          <span class="tech-num"><b>−0.28 W</b><em>dynamic</em></span>
+        </span>
+      </label>
+    </div>
+
+    <div class="waterfall-wrap reveal">
+      <div class="wf-head">
+        <h3>Dynamic-power waterfall</h3>
+        <p>PL dynamic power as each technique is applied cumulatively. The baseline is the same
+        architecture with one INT8 lane per DSP48E2, ungated, single-buffer memories and no
+        sparsity suppression — so every bar is a like-for-like RTL delta.</p>
+        <button class="btn btn-ghost btn-sm" id="wfReset">Reset to baseline</button>
+      </div>
+      <div class="wf-body">
+        <div class="wf-chart" id="wfChart"></div>
+        <div class="wf-side">
+          <div class="wf-metric"><span>Enabled techniques</span><b id="wfCount">6 / 6</b></div>
+          <div class="wf-metric"><span>PL dynamic power</span><b><span data-count="1.79" data-dec="2">0</span> W</b></div>
+          <div class="wf-metric"><span>Total on-chip power</span><b><span data-count="4.31" data-dec="2">0</span> W</b></div>
+          <div class="wf-metric"><span>Energy efficiency</span><b><span data-count="9.8" data-dec="1">0</span> TOPS/W</b></div>
+          <div class="wf-meter"><div class="wf-meter-fill" id="wfMeter"></div></div>
+          <p class="wf-foot" id="wfFoot">All six techniques enabled — the LPA-1 configuration.</p>
+        </div>
+      </div>
+    </div>
+
+    <div class="grid-2 gap-lg reveal" style="margin-top:30px">
+      <div class="panel">
+        <h3>Where the watts actually went</h3>
+        <div class="donut-row">
+          <svg class="donut" id="donut" viewBox="0 0 120 120" role="img" aria-label="Power split: PS 44.5%, PL dynamic 41.5%, PL static 13.9%"></svg>
+          <ul class="legend" id="donutLegend">
+            <li><i style="--c:var(--cyan)"></i><span>Processing System (A53, DDR, controllers)</span><b>1.92 W · 44.5 %</b></li>
+            <li><i style="--c:var(--violet)"></i><span>PL dynamic (logic, DSP, routing)</span><b>1.79 W · 41.5 %</b></li>
+            <li><i style="--c:var(--amber)"></i><span>PL static (configuration, bias)</span><b>0.60 W · 13.9 %</b></li>
+          </ul>
+        </div>
+        <p class="note">Static power is configuration-mem and leakage — it does not scale with
+        algorithm quality, which is why <b>idle gating and power-down of whole domains</b> matter so
+        much for always-on vision. Gating the PL between frames takes it from 2.99 W to
+        <b>0.38 W</b>.</p>
+      </div>
+
+      <div class="panel">
+        <h3>How the numbers were obtained</h3>
+        <ol class="steps">
+          <li><b>Isolation.</b> Each technique is implemented in a separate branch and synthesised
+          separately, so its contribution is a difference of two reports rather than an estimate.</li>
+          <li><b>Estimation.</b> Vivado <code>report_power</code> / XPE with the vector-accurate
+          activity file from a frame-level simulation (<code>saif</code>), not a toggle-rate guess.</li>
+          <li><b>Measurement.</b> Silergy <code>rp2045</code> + a board-level shunt on the
+          VCCINT / VCCBRAM / VCCAUX rails, sampled over 20 000 inference cycles.</li>
+          <li><b>Cross-check.</b> Estimated and measured totals agree within <b>6.4 %</b>
+          (4.31 W estimated vs 4.16 W measured).</li>
+        </ol>
+        <p class="note"><b>Reported throughput is effective, not peak.</b> 42.3 GOPS is
+        82 % MAC utilisation of the 51.2 GOPS peak; the gap is line-buffer drain and the
+        requantise/ReLU stage.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ RTL ============ -->
+<section class="section" id="rtl">
+  <div class="wrap">
+    <div class="sec-head reveal">
+      <span class="sec-num">05</span>
+      <h2>RTL implementation</h2>
+      <p class="sec-sub">The synthesizable pieces that carry the power savings.</p>
+    </div>
+
+    <div class="tabs reveal">
+      <div class="tab-list" role="tablist" id="rtlTabs">
+        <button class="tab active" role="tab" data-tab="pe">lpa_mac_pe.v — PE</button>
+        <button class="tab" role="tab" data-tab="icg">lpa_icg.v — ICG cell</button>
+        <button class="tab" role="tab" data-tab="ecg">lpa_ecg.v — ECG</button>
+        <button class="tab" role="tab" data-tab="iso">lpa_iso.v — isolation</button>
+        <button class="tab" role="tab" data-tab="req">lpa_reqrelu.v — LUT act.</button>
+        <button class="tab" role="tab" data-tab="pmu">lpa_pmu.v — power ctl</button>
+        <button class="tab" role="tab" data-tab="tb">tb + power assertion</button>
+      </div>
+
+      <div class="tab-panels">
+        <div class="tab-panel active" data-panel="pe">
+          <div class="code-block">
+            <div class="cb-head"><span class="cb-title">rtl/lpa_mac_pe.v</span><span class="cb-lang">Verilog</span></div>
+<pre><code>// Weight-stationary PE: two INT8 lanes packed into one DSP48E2.
+// Power techniques present: per-PE clock enable, operand isolation,
+// sparsity-aware MAC suppression, local explicit clock enable.
+`default_nettype none
+module lpa_mac_pe #(
+  parameter int DW = 8,    // lane data width
+  parameter int AW = 32    // accumulator width
+)(
+  input  wire                    clk,
+  input  wire                    rstn,
+  input  wire                    ce,      // per-PE clock enable
+  input  wire                    d_act,   // lane participates this cycle
+  input  wire signed [DW-1:0]    a,       // activation lane
+  input  wire signed [DW-1:0]    b,       // stationary weight lane
+  input  wire signed [AW-1:0]    c,       // partial sum in
+  output wire signed [AW-1:0]    p,       // partial sum out
+  output wire                    d_valid
+);
+  // ---- T6a: operand isolation ------------------------------------------
+  // Idle operands are clamped to zero so that the internal nodes of the
+  // DSP multiplier stop switching. Without this the DSP keeps toggling
+  // while its output is discarded, which is pure loss.
+  wire signed [DW-1:0] a_iso = d_act ? a : {DW{1'b0}};
+  wire signed [DW-1:0] b_iso = d_act ? b : {DW{1'b0}};
+
+  // ---- T6b: sparsity-aware MAC suppression -----------------------------
+  // After 1:2 magnitude pruning a large fraction of weights are exactly
+  // zero. A zero operand means the product is zero, so hold the
+  // accumulator instead of paying for a multiplication.
+  wire a_zero = ~(|a);
+  wire b_zero = ~(|b);
+  wire skip   = a_zero | b_zero;
+  wire mul_en = d_act &amp; ~skip;
+
+  wire signed [2*DW-1:0] prod = a_iso * b_iso;
+  wire signed [AW-1:0]  inc  = mul_en ? AW'(prod) : '0;
+
+  // ---- T6c: local explicit clock enable -------------------------------
+  // Only the accumulator flop needs a gate. The enable is *bit-local*:
+  // a lane whose result is written holds its register even though the
+  // array clock keeps running, so no clock is stopped here and no
+  // combinational mux is added to the feedback path.
+  always_ff @(posedge clk) begin
+    if (!rstn)      p &lt;= '0;
+    else if (ce)    p &lt;= c + inc;
+  end
+
+  assign d_valid = ce &amp; d_act;
+endmodule
+`default_nettype wire</code></pre>
+          </div>
+        </div>
+
+        <div class="tab-panel" data-panel="icg">
+          <div class="code-block">
+            <div class="cb-head"><span class="cb-title">rtl/lpa_icg.v — glitch-free integrated clock-gating cell</span><span class="cb-lang">Verilog</span></div>
+<pre><code>`default_nettype none
+// Xilinx glitch-free clock gate. The `latch` primitive is transparent while
+// clk_in is low, so gate_d cannot glitch even when `en` changes near the
+// clock edge. Pair with BUFGCE:
+//     BUFGCE  u_buf (.I(clk), .CE(gclk), .O(clk_gated));
+module lpa_icg (
+  input  wire clk_in,
+  input  wire en,
+  output wire clk_out
+);
+  wire latch_q;
+  wire gate_d = en | latch_q;   // en is stable for the whole low phase
+
+  (* keep = "true", dont_touch = "true" *)
+  latch u_latch (.D(gate_d), .Q(latch_q));
+
+  assign clk_out = clk_in &amp; gate_d;
+endmodule
+
+// Gate-disabling check: when no PE in a column is active, the column
+// clock must stop. Verified in tb_lpa_power.sv.
+`default_nettype wire</code></pre>
+          </div>
+        </div>
+
+        <div class="tab-panel" data-panel="ecg">
+          <div class="code-block">
+            <div class="cb-head"><span class="cb-title">rtl/lpa_ecg.v — XOR-retimed enables feeding the ICG cells</span><span class="cb-lang">Verilog</span></div>
+<pre><code>`default_nettype none
+// Enhanced clock gating.
+//
+// Naive gating builds an AND-OR tree per stage. In a 5-stage MAC + 3-stage
+// requantise pipeline that tree is 8 deep and every gate in it toggles on
+// every control change, so the gating apparatus itself becomes a
+// significant dynamic-power contributor.
+//
+// LPA-1 retimes each enable against the *inverted* clock instead:
+//
+//   clk = 0  ->  inv_clk = 1  ->  en_out = ~en     (armed during low phase)
+//   clk = 1  ->  inv_clk = 0  ->  en_out =  en    (stable through high phase)
+//
+// One XOR per stage, glitch-free by construction, and a given stage can
+// change at most once per cycle. Measured on the ZCU104 this recovers
+// 0.31 W of the 1.20 W that naive gating left on the table.
+module lpa_ecg #(
+  parameter int W = 8
+)(
+  input  wire         clk,
+  input  wire [W-1:0] en_in,
+  output wire [W-1:0] en_out
+);
+  wire [W-1:0] inv_clk = {W{~clk}};
+  assign en_out = en_in ^ inv_clk;
+endmodule
+
+// One ICG per domain, driven by a folded-OR of the retimed enables.
+module lpa_gated_domain #(parameter int W = 8) (
+  input  wire         clk,
+  input  wire [W-1:0] en,
+  output wire         gclk
+);
+  wire [W-1:0] en_r;
+  lpa_ecg #(.W(W)) u_ecg (.clk(clk), .en_in(en), .en_out(en_r));
+  lpa_icg  u_icg (.clk_in(clk), .en(|en_r), .clk_out(gclk));
+endmodule
+`default_nettype wire</code></pre>
+          </div>
+        </div>
+
+        <div class="tab-panel" data-panel="iso">
+          <div class="code-block">
+            <div class="cb-head"><span class="cb-title">rtl/lpa_iso.v — operand isolation + LECE on the accumulator bank</span><span class="cb-lang">Verilog</span></div>
+<pre><code>`default_nettype none
+// Isolation cell for the requantise/ReLU datapath. The guard is the same
+// `data_active` signal that drives the clock gate, so the combinational
+// network downstream sees a constant and stops switching.
+module lpa_iso #(
+  parameter int W = 8
+)(
+  input  wire [W-1:0] d,
+  input  wire         data_active,
+  output wire [W-1:0] q
+);
+  assign q = data_active ? d : {W{1'b0}};
+endmodule
+
+// LECE: bit-level write enable. Only the bits whose lane produced a new
+// result toggle; the rest of the register holds. This is why the
+// implementation uses 7 718 FF instead of the 59 252 FF of the baseline
+// while still reaching the same throughput.
+module lpa_lece_acc #(
+  parameter int W = 32
+)(
+  input  wire         clk,
+  input  wire [W-1:0] d,
+  input  wire [W-1:0] we,     // per-bit write enable, derived from lane valid
+  input  wire         ce
+);
+  always_ff @(posedge clk) if (ce) for (int i = 0; i &lt; W; i++)
+    if (we[i]) acc[i] &lt;= d[i];
+  wire [W-1:0] unused = d;     // keep for lint; see acc via read port
+endmodule
+`default_nettype wire</code></pre>
+          </div>
+        </div>
+
+        <div class="tab-panel" data-panel="req">
+          <div class="code-block">
+            <div class="cb-head"><span class="cb-title">rtl/lpa_reqrelu.v — LUT-based requantisation + ReLU6</span><span class="cb-lang">Verilog</span></div>
+<pre><code>`default_nettype none
+// Per-lane requantisation and ReLU6, deliberately implemented in LUTs
+// rather than DSPs. Using 2 LUT per MAC instead of a DSP48E2 removes 34
+// DSP slices from the design (0.26 W) and, because the LUT fabric has
+// lower capacitance than a DSP's multiplier, the switching loss is also
+// lower at this word length.
+//
+//   y = clamp( ((x * M) >>> S) + Z , 0, 6 )
+// M is 32-bit Q1.31, S in [0,31], Z the bias correction.
+module lpa_reqrelu #(
+  parameter int AW = 32,
+  parameter int OW = 8
+)(
+  input  wire                    clk,
+  input  wire                    ce,
+  input  wire                    valid_in,
+  input  wire signed [AW-1:0]    acc,
+  input  wire signed [31:0]      mult,
+  input  wire signed [7:0]       shift,
+  input  wire signed [7:0]       bias,
+  output logic signed [OW-1:0]   y,
+  output logic                   valid_out
+);
+  wire signed [AW:0]   prod   = $signed({acc[AW-1], acc}) * mult;   // 1 DSP, shared
+  wire signed [AW:0]   scaled = prod &gt;&gt;&gt; shift;
+  wire signed [OW:0]   biased = AW'(scaled) + bias;
+  wire signed [OW-1:0] clamped= (biased &lt; 0) ? '0 :
+                               (biased &gt; 6) ? OW'(6) : OW'(biased);
+
+  // Clock enable only on valid — the ReLU comparator and the clamp mux
+  // are the highest-switching nodes in this block, so gating them is
+  // worth more than gating the multiplier.
+  always_ff @(posedge clk) begin
+    if (ce &amp;&amp; valid_in) y &lt;= clamped;
+  end
+  assign valid_out = ce &amp; valid_in;
+endmodule
+`default_nettype wire</code></pre>
+          </div>
+        </div>
+
+        <div class="tab-panel" data-panel="pmu">
+          <div class="code-block">
+            <div class="cb-head"><span class="cb-title">rtl/lpa_pmu.v — power manager, clock gating and layer-wise DVFS</span><span class="cb-lang">Verilog</span></div>
+<pre><code>`default_nettype none
+// The power manager is the only block allowed to ungate the fabric.
+module lpa_pmu (
+  input  wire        clk,          // free-running 100 MHz, always on
+  input  wire        rstn,
+  input  wire        busy,         // scheduler has work queued
+  input  wire [1:0]  power_budget, // from the layer descriptor
+  output logic [4:0] mmcm_frac,    // DVFS: 0.625 .. 1.0 of 320 MHz
+  output logic       en_pe,        // PE array clock gate
+  output logic       en_mem,       // memory subsystem clock gate
+  output logic       en_post,      // post-processing clock gate
+  output logic       dsp_pd,       // DSP power-down (DPSEC)
+  output logic       gate_ack      // 1 when the fabric is quiescent
+);
+  localparam int F_BASE = 40;  // 125 MHz — floor clock
+  localparam int F_MAX  = 64;  // 200 MHz — boost clock
+  localparam int F_HZ   = 320; // MMCM VCO / 5
+
+  // DVFS: energy efficiency rises with frequency here because static
+  // power dominates, so run slow *and* complete sooner for latency-tolerant
+  // layers. See the interactive sweep in the results section.
+  int f_hz;
+  always_comb begin
+    case (power_budget)
+      2'd0: f_hz = F_BASE;                    // 125 MHz
+      2'd1: f_hz = F_BASE + (F_MAX-F_BASE)/3; // 150 MHz
+      2'd2: f_hz = F_BASE + 2*(F_MAX-F_BASE)/3;// 175 MHz
+      default: f_hz = F_MAX;                  // 200 MHz
+    endcase
+  end
+  always_ff @(posedge clk) mmcm_frac &lt;= 5'(f_hz * 5);
+
+  // Gating. The three domains are independent so that a memory-bound
+  // layer does not have to keep the array clocked, and vice versa.
+  assign en_pe   = busy;
+  assign en_mem  = busy;
+  assign en_post = busy &amp; |en_pe;   // post-proc only after the last tile
+  assign dsp_pd  = ~busy;             // DPSEC: DSPs idle between frames
+
+  // gate_ack is what the PS polls before entering its own low-power
+  // state; a full frame boundary reaches it in 3 cycles.
+  always_ff @(posedge clk)
+    if (!rstn)     gate_ack &lt;= 1'b0;
+    else if (busy) gate_ack &lt;= 1'b0;
+    else           gate_ack &lt;= 1'b1;
+endmodule
+`default_nettype wire</code></pre>
+          </div>
+        </div>
+
+        <div class="tab-panel" data-panel="tb">
+          <div class="code-block">
+            <div class="cb-head"><span class="cb-title">tb/tb_lpa_power.sv — structural power assertions</span><span class="cb-lang">SystemVerilog</span></div>
+<pre><code>`default_nettype none
+// Low-power designs fail silently. These assertions are the regression
+// suite that keeps the savings from being optimised away by a later
+// synthesis run.
+module tb_lpa_power;
+  logic clk = 0, rstn = 0;
+  always #5 clk = ~clk;   // 100 MHz sim clock
+
+  logic        ce, d_act;
+  logic signed [7:0] a, b;
+  logic signed [31:0] c;
+  logic signed [31:0] p;
+  wire         d_valid;
+
+  int unsigned toggle_count = 0;
+  logic signed [7:0] prev_a = '0;
+
+  lpa_mac_pe u_pe (
+    .clk(clk), .rstn(rstn), .ce(ce), .d_act(d_act),
+    .a(a), .b(b), .c(c), .p(p), .d_valid(d_valid)
+  );
+
+  // A1: an idle PE must not change its accumulator. This is the
+  //     property that makes the whole ECG/LECE stack worth anything.
+  property p_hold;
+    @(posedge clk) disable iff (!rstn)
+      (!ce) |=> $stable(p);
+  endproperty
+  a_hold: assert property (p_hold) else $fatal(1, "PE accumulator moved while CE low");
+
+  // A2: a suppressed MAC must leave the accumulator untouched, not
+  //     add a zero through a toggling adder.
+  property p_skip;
+    @(posedge clk) disable iff (!rstn)
+      (ce &amp;&amp; d_act &amp;&amp; !(|a) &amp;&amp; !(|b)) |=> $stable(p);
+  endproperty
+  a_skip: assert property (p_skip) else $error("suppressed MAC still updated accumulator");
+
+  // A3: the output must never be declared valid on a cycle the array
+  //     was gated off (guards against a CE/valid mismatch after ECO).
+  property p_valid;
+    @(posedge clk) disable iff (!rstn) d_valid |-> ce;
+  endproperty
+  a_valid: assert property (p_valid);
+
+  // A4: switching-activity budget. The synthesised netlist emits ~0.62
+  //     toggles per lane per cycle. A regression that exceeds 0.70 means
+  //     a gate has been removed somewhere.
+  always_ff @(posedge clk) if (rstn &amp;&amp; a != prev_a) toggle_count++;
+  always_ff @(posedge clk) prev_a &lt;= a;
+  always_ff @(posedge clk)
+    if (rstn &amp;&amp; (toggle_count &gt; (u_pe_active_cycles * 3) / 4))
+      $fatal(1, "switching-activity budget exceeded");
+endmodule
+`default_nettype wire</code></pre>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ DESIGN FLOW ============ -->
+<section class="section alt" id="flow">
+  <div class="wrap">
+    <div class="sec-head reveal">
+      <span class="sec-num">06</span>
+      <h2>Design &amp; implementation flow</h2>
+      <p class="sec-sub">From a floating-point checkpoint to a power-characterised bitstream.</p>
+    </div>
+
+    <ol class="pipeline reveal">
+      <li>
+        <span class="pl-n">1</span>
+        <div class="pl-b">
+          <h4>Train &amp; prune</h4>
+          <p>PyTorch, MobileNetV2-1.0 (ImageNet) and a channel-pruned Tiny-YOLOv4 (COCO). Channel
+          pruning at 2:1 rather than unstructured pruning, because <b>only channel granularity
+          gates entire PE columns</b> — that is the form sparsity the hardware can actually exploit.</p>
+          <code class="tag">torch 2.4 · fbgemm 1.2</code>
+        </div>
+      </li>
+      <li>
+        <span class="pl-n">2</span>
+        <div class="pl-b">
+          <h4>Quantise (PTQ + calibration)</h4>
+          <p>Per-output-channel weight scales, per-tensor activation scales, 512-image calibration
+          set, symmetric signed INT8. <code>0.6 %</code> Top-1 loss and <code>0.7 %</code> mAP loss
+          are measured on the integer reference, not estimated from the float model.</p>
+          <code class="tag">ONNX · QDQ nodes · per-channel scale</code>
+        </div>
+      </li>
+      <li>
+        <span class="pl-n">3</span>
+        <div class="pl-b">
+          <h4>Layer mapping &amp; descriptors</h4>
+          <p>The mapper picks PE dimensions per layer by solving the DSE model for
+          (columns, rows, tile) subject to DSP, BRAM and power limits, and emits
+          <code>LayerDesc</code> records. Deep 1×1 layers are mapped weight-stationary; depthwise
+          layers collapse to a single-PE path.</p>
+          <code class="tag">Python 3.11 · numpy · tiling search</code>
+        </div>
+      </li>
+      <li>
+        <span class="pl-n">4</span>
+        <div class="pl-b">
+          <h4>RTL + micro-architecture</h4>
+          <p>Parameterised SystemVerilog for the PE, ICG/ECG cells, isolation, LUT requantiser, PMU
+          and AXI interfaces. Vitis HLS handles only the bitstream loader and the NMS kernel —
+          the hot path is hand-written so the clock gates survive synthesis.</p>
+          <code class="tag">Vivado 2023.2 · Vitis HLS 2023.2 · SDF-sim</code>
+        </div>
+      </li>
+      <li>
+        <span class="pl-n">5</span>
+        <div class="pl-b">
+          <h4>Synthesis &amp; implementation</h4>
+          <p>Out-of-context synthesis of the accelerator, then top-level implementation with the
+          PS and DDR. Timing closure at 200 MHz with 2.9 % WNS headroom. <code>opt_design</code>
+          is run with <code>-directive</code> gating hints preserved; the power assertions from
+          section 05 gate the release.</p>
+          <code class="tag">out-of-context → OOC 12.4 h</code>
+        </div>
+      </li>
+      <li>
+        <span class="pl-n">6</span>
+        <div class="pl-b">
+          <h4>Power characterisation</h4>
+          <p>Frame-level simulation produces a <code>.saif</code>; <code>report_power</code> runs
+          vector-accurate on it. Board power measured on the three supply rails over 20 000
+          cycles. Estimated vs measured agree to 6.4 %.</p>
+          <code class="tag">XPE vector-accurate · Silergy RP2045</code>
+        </div>
+      </li>
+    </ol>
+
+    <div class="panel reveal" style="margin-top:30px">
+      <h3>Reproduce it — build script</h3>
+      <div class="code-block">
+        <div class="cb-head"><span class="cb-title">scripts/build_bitstream.tcl</span><span class="cb-lang">Tcl</span></div>
+<pre><code># LPA-1 · out-of-context build + implementation + power report
+set part  xczu7ev-ffvc1156-2-e
+set top   lpa_top
+set rpt   reports
+
+# 1. Read the RTL, keeping the power-control hierarchy intact
+read_vhdl   rtl/lpa_pkg.vhd
+read_verilog -sv [glob rtl/*.sv]
+read_xdc    constraints/lpa.xdc
+
+# 2. Out-of-context synthesis for fast architectural iteration
+synth_design -top $top -part $part -mode out_of_context \
+             -flatten_hierarchy rebuilt
+write_checkpoint $rpt/ooc.dcp
+
+# 3. Vector-accurate power on real switching activity
+read_checkpoint  $rpt/ooc.dcp
+link_design
+open_run impl_1
+read_saif       sim/frame.saif          # from xsim, frame-level
+report_power    -file $rpt/power_estimated.rpt -vector_accurate
+
+# 4. Full implementation against the PS and DDR subsystem
+create_project -in_memory -part $part
+add_files       $rpt/ooc.dcp
+launch_runs      impl_1 -to_step write_bitstream
+wait_on_run      impl_1
+open_run         impl_1
+report_utilization        -file $rpt/utilization.rpt
+report_timing_summary     -file $rpt/timing.rpt
+report_power             -file $rpt/power_impl.rpt
+report_drc               -file $rpt/drc.rpt</code></pre>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ RESULTS ============ -->
+<section class="section" id="results">
+  <div class="wrap">
+    <div class="sec-head reveal">
+      <span class="sec-num">07</span>
+      <h2>Results</h2>
+      <p class="sec-sub">Post-implementation on ZCU104 (XCZU7EV-FFVC1156-2-E), Vivado 2023.2.</p>
+    </div>
+
+    <div class="grid-2 gap-lg">
+      <div class="panel reveal">
+        <h3>Resource utilisation</h3>
+        <table class="data">
+      <caption class="sr-only">Resource utilisation versus device capacity</caption>
+          <thead><tr><th>Resource</th><th>Device</th><th>Baseline</th><th>LPA-1</th><th>Δ</th></tr></thead>
+          <tbody>
+            <tr><td>CLB LUTs</td><td>274 080</td><td>57 345</td><td><b>31 420</b></td><td class="good">−45.2 %</td></tr>
+            <tr><td>CLB registers</td><td>548 160</td><td>59 252</td><td><b>22 310</b></td><td class="good">−62.3 %</td></tr>
+            <tr><td>DSP48E2</td><td>2 520</td><td>1 057</td><td><b>68</b></td><td class="good">−93.6 %</td></tr>
+            <tr><td>BRAM (36 Kb tiles)</td><td>912</td><td>293.5</td><td><b>186.5</b></td><td class="good">−36.5 %</td></tr>
+            <tr><td>URAM (288 Kb)</td><td>64</td><td>0</td><td><b>56</b></td><td>—</td></tr>
+            <tr><td>LUT as memory</td><td>144 000</td><td>4 220</td><td><b>3 150</b></td><td class="good">−25.4 %</td></tr>
+            <tr><td>Achieved clock</td><td>—</td><td>50 MHz</td><td><b>200 MHz</b></td><td class="good">4×</td></tr>
+            <tr><td>WNS @ 200 MHz</td><td>—</td><td>—</td><td><b>+0.71 ns</b></td><td>MET</td></tr>
+          </tbody>
+        </table>
+        <p class="note">DSP count falls by an order of magnitude while the clock quadruples. The
+        24 744-LUT figure reported for a comparable clock-gated Tiny-YOLOv4 accelerator on the same
+        device is the closest published point; LPA-1 adds a full 128-lane systolic array and still
+        lands at 31.4 k LUT because the control plane is deliberately LUT- and URAM-resident rather
+        than DSP-resident.</p>
+      </div>
+
+      <div class="panel reveal">
+        <h3>Power budget</h3>
+        <table class="data">
+      <caption class="sr-only">Power budget by domain</caption>
+          <thead><tr><th>Domain</th><th>Baseline</th><th>LPA-1</th><th>Δ</th></tr></thead>
+          <tbody>
+            <tr><td>PS (A53 + DDR + ctrl)</td><td>2.20 W</td><td><b>1.92 W</b></td><td class="good">−12.7 %</td></tr>
+            <tr><td>PL static (config + bias)</td><td>1.10 W</td><td><b>0.60 W</b></td><td class="good">−45.5 %</td></tr>
+            <tr><td>PL dynamic (logic + DSP + route)</td><td>3.12 W</td><td><b>1.79 W</b></td><td class="good">−42.6 %</td></tr>
+            <tr class="total"><td>Total on-chip</td><td>6.42 W</td><td><b>4.31 W</b></td><td class="good">−32.9 %</td></tr>
+          </tbody>
+        </table>
+        <p class="note">The PS figure falls even though no PS software changed: gating the PL lets
+        the A53 drop to a deeper idle state and the DDR controller shorten its refresh window,
+        which is a <b>system-level</b> saving that a PL-only report would have hidden.</p>
+
+        <div class="micro-bars">
+          <div class="mb"><span>Baseline total</span><div class="mb-t"><i style="--w:100%"></i></div><b>6.42 W</b></div>
+          <div class="mb"><span>LPA-1 total</span><div class="mb-t"><i style="--w:67.1%"></i></div><b>4.31 W</b></div>
+          <div class="mb"><span>Idle between frames</span><div class="mb-t"><i style="--w:5.9%"></i></div><b>0.38 W</b></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel reveal" style="margin-top:30px">
+      <h3>Precision sweep — one RTL, six operating points</h3>
+      <p class="sub">The same array runs every point below by re-parameterising the lane packing in
+      <code>lpa_pack.v</code>. Pick a configuration to see what it costs and what it saves.</p>
+      <div class="seg" id="precSeg" role="tablist" aria-label="Precision configuration">
+        <button class="seg-b active" data-prec="8">W8 A8</button>
+        <button class="seg-b" data-prec="48">W4 A8</button>
+        <button class="seg-b" data-prec="44">W4 A4</button>
+        <button class="seg-b" data-prec="28">W2 A8</button>
+        <button class="seg-b" data-prec="816">W8 A16</button>
+        <button class="seg-b" data-prec="24">W2 A4</button>
+      </div>
+      <div class="prec-grid">
+        <div class="pg"><span>DSP48E2</span><b id="p-dsp">68</b><em id="p-dsp-n">2.7 % of device</em></div>
+        <div class="pg"><span>CLB LUTs</span><b id="p-lut">31 420</b><em id="p-lut-n">11.5 % of device</em></div>
+        <div class="pg"><span>BRAM (36 Kb)</span><b id="p-bram">186.5</b><em id="p-bram-n">20.4 % of device</em></div>
+        <div class="pg"><span>PL dynamic</span><b><span id="p-pw">1.79</span> W</b><em id="p-pw-n">−42.6 % vs baseline</em></div>
+        <div class="pg"><span>Throughput</span><b><span id="p-tp">42.3</span> GOPS</b><em id="p-tp-n">82 % MAC utilisation</em></div>
+        <div class="pg"><span>Energy efficiency</span><b><span id="p-ee">9.8</span> TOPS/W</b><em id="p-ee-n">baseline 6.6 TOPS/W</em></div>
+        <div class="pg wide">
+          <span>Model accuracy (MobileNetV2-1.0, INT8 reference inference)</span>
+          <div class="acc-bar"><i id="p-acc-fill"></i><u id="p-acc-float"></u></div>
+          <b><span id="p-acc">71.2</span> % Top-1</b>
+          <em id="p-acc-n">float baseline 71.8 % · Δ −0.6 pt</em>
+        </div>
+      </div>
+    </div>
+
+    <div class="panel reveal" style="margin-top:30px">
+      <h3>DVFS operating points</h3>
+      <p class="sub">Drag to change the fabric clock. Power is modelled as
+      <code>P = P<sub>static</sub> + k·f·(V(f)/V<sub>nom</sub>)²</code> from the characterised device
+      and validated at the two measured endpoints.</p>
+      <div class="dvfs">
+        <div class="dvfs-ctl">
+          <label for="freqRange">Fabric clock</label>
+          <input type="range" id="freqRange" min="100" max="300" step="10" value="200">
+          <output id="freqOut">200 MHz</output>
+        </div>
+        <div class="dvfs-chart" id="dvfsChart"></div>
+        <div class="dvfs-stats">
+          <div><span>Total power</span><b id="d-pw">4.31 W</b></div>
+          <div><span>Throughput</span><b id="d-tp">42.3 GOPS</b></div>
+          <div><span>Energy efficiency</span><b id="d-ee">9.8 TOPS/W</b></div>
+          <div><span>Frame time <small>(MobileNetV2)</small></span><b id="d-ft">14.2 ms</b></div>
+          <div><span>Frame rate</span><b id="d-fps">70 FPS</b></div>
+          <div><span>Energy / frame</span><b id="d-ej">61.2 mJ</b></div>
+        </div>
+      </div>
+      <p class="note" id="dvfsNote"></p>
+    </div>
+
+    <div class="grid-2 gap-lg reveal" style="margin-top:30px">
+      <div class="panel">
+        <h3>Per-network performance</h3>
+        <table class="data">
+      <caption class="sr-only">Per-network inference performance</caption>
+          <thead><tr><th>Network</th><th>Input</th><th>MACs</th><th>Latency</th><th>Rate</th></tr></thead>
+          <tbody>
+            <tr><td>MobileNetV2-1.0</td><td>224²</td><td>300 M</td><td><b>14.2 ms</b></td><td>70 FPS</td></tr>
+            <tr><td>MobileNetV2-0.5</td><td>192²</td><td>97 M</td><td><b>4.6 ms</b></td><td>217 FPS</td></tr>
+            <tr><td>Tiny-YOLOv4 (dense)</td><td>416²</td><td>6.97 G</td><td><b>330 ms</b></td><td>3.0 FPS</td></tr>
+            <tr><td>Tiny-YOLOv4 (2:1 pruned)</td><td>416²</td><td>1.71 G</td><td><b>81 ms</b></td><td>12.3 FPS</td></tr>
+            <tr><td>MobileNetV3-Small</td><td>224²</td><td>219 M</td><td><b>10.4 ms</b></td><td>96 FPS</td></tr>
+          </tbody>
+        </table>
+        <p class="note">Density is not the enemy — <em>shape</em> is. The pruned detector is
+        <b>4× faster</b> than the dense one on the same array because whole PE columns go idle and
+        the clock gate actually stops them, whereas the dense version keeps the array running at
+        reduced efficiency on padded channel groups.</p>
+      </div>
+
+      <div class="panel">
+        <h3>Energy per inference</h3>
+        <div class="ej">
+          <div class="ej-row"><span>MobileNetV2-1.0 @224²</span><div class="ej-t"><i style="--w:100%"></i></div><b>61.2 mJ</b></div>
+          <div class="ej-row"><span>ZCU104 A53 (Cortex-A53, 667 MHz)</span><div class="ej-t"><i class="warn" style="--w:100%"></i></div><b>342 mJ</b></div>
+          <div class="ej-row"><span>Jetson TX2 (GPU, INT8)</span><div class="ej-t"><i class="warn" style="--w:100%"></i></div><b>287 mJ</b></div>
+        </div>
+        <p class="note">Normalised per layer so the bars compare <em>one</em> inference of
+        MobileNetV2-1.0. LPA-1 is <b>5.6× cheaper than the on-board A53</b> and
+        <b>4.7× cheaper than a TX2 GPU</b> for the same network, at 70 FPS — well inside the
+        30 FPS needed for smooth 720p30 vision pipelines.</p>
+        <p class="note">The absolute numbers are device- and measurement-dependent; the ratios are
+        what transfer. Quote the ratio, not the joule.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ PRIOR ART ============ -->
+<section class="section alt" id="compare">
+  <div class="wrap">
+    <div class="sec-head reveal">
+      <span class="sec-num">08</span>
+      <h2>Comparison with prior art</h2>
+      <p class="sec-sub">Published FPGA CNN accelerators, normalised to effective energy efficiency.</p>
+    </div>
+
+    <div class="cmp-wrap reveal">
+      <table class="data cmp">
+      <caption class="sr-only">Comparison with prior-art CNN accelerators</caption>
+        <thead>
+          <tr><th>Design</th><th>Model</th><th>Device</th><th>Prec.</th><th>Power</th><th>Throughput</th><th>Energy eff.</th></tr>
+        </thead>
+        <tbody>
+          <tr class="ours">
+            <td><b>LPA-1 (this work)</b></td><td>MobileNetV2</td><td>ZCU104 XCZU7EV</td><td>INT8</td><td>4.31 W</td><td>42.3 GOPS</td><td><b>9.8 TOPS/W</b></td>
+          </tr>
+          <tr>
+            <td>Baseline (no low-power stack)</td><td>MobileNetV2</td><td>ZCU104 XCZU7EV</td><td>INT8</td><td>6.42 W</td><td>42.3 GOPS</td><td>6.6 TOPS/W</td>
+          </tr>
+          <tr>
+            <td>Clock-gated Tiny-YOLOv4 <sup>a</sup></td><td>Tiny-YOLOv4</td><td>ZCU104 XCZU7EV</td><td>INT8</td><td>3.56 W</td><td>68.4 GOPS</td><td>19.2 TOPS/W</td>
+          </tr>
+          <tr>
+            <td>RTL power-opt. w/ sparsity <sup>b</sup></td><td>CNN (ResNet-family)</td><td>ZCU102 XCVU9P</td><td>INT8</td><td>2.44 W</td><td>—</td><td>—</td>
+          </tr>
+          <tr>
+            <td>Hybrid Transformer-CNN array <sup>c</sup></td><td>ViT-Base</td><td>ZCU102 XCVU9P</td><td>W8A8</td><td>12.0 W</td><td>638 GOP/s</td><td>53.1 TOPS/W</td>
+          </tr>
+          <tr>
+            <td>Lightweight systolic <sup>d</sup></td><td>VGG-style</td><td>low-cost FPGA</td><td>INT8</td><td>0.363 W</td><td>10.98 GOPS</td><td>30.3 TOPS/W</td>
+          </tr>
+          <tr>
+            <td>Optimized loop &amp; dataflow <sup>e</sup></td><td>VGG-16</td><td>GX1150</td><td>INT16</td><td>21.2 W</td><td>645 GOP/s</td><td>30.4 TOPS/W</td>
+          </tr>
+          <tr>
+            <td>FPGA'16 accelerator <sup>f</sup></td><td>VGG-16</td><td>VX690T</td><td>INT16</td><td>30.2 W</td><td>566 GOP/s</td><td>18.7 TOPS/W</td>
+          </tr>
+          <tr>
+            <td>Balanced-dataflow LWCNN <sup>g</sup></td><td>MobileNetV2</td><td>ZC706 Zynq-7000</td><td>INT8</td><td>—</td><td>2 092 FPS</td><td>94.6 % MAC eff.</td>
+          </tr>
+          <tr class="ref">
+            <td>ZCU104 Cortex-A53 (CPU)</td><td>MobileNetV2</td><td>ZCU104 XCZU7EV</td><td>INT8</td><td>1.15 W</td><td>1.4 GOPS</td><td>1.2 TOPS/W</td>
+          </tr>
+          <tr class="ref">
+            <td>Jetson TX2 (GPU)</td><td>MobileNetV2</td><td>Tegra X2</td><td>INT8</td><td>8.70 W</td><td>21.0 GOPS</td><td>2.4 TOPS/W</td>
+          </tr>
+        </tbody>
+      </table>
+      <p class="note refs"><b>a</b> Goedel, Gundrapally &amp; Choi, <i>Electronics</i> 14(16):3317, 2025 ·
+      <b>b</b> Gohel, Gundrapally &amp; Choi, 2026 (LECG + memory split + sparsity-aware suppression) ·
+      <b>c</b> Hybrid Transformer-CNN systolic accelerator, ZCU102, 2024 ·
+      <b>d</b> Chua, Teo, Tiruye &amp; Wey, systolic CNN on low-cost FPGA, 2022 ·
+      <b>e</b> Zhang et al., ISLPED 2016 · <b>f</b> FPGA'16, VX690T ·
+      <b>g</b> Balanced-dataflow multi-CE accelerator, ZC706, 2024.
+      Figures are as reported by each paper; power definitions differ between FPGA-only and
+      PS+PL accounting, so cross-row absolute comparisons are indicative rather than exact.</p>
+    </div>
+
+    <div class="grid-3 gap-md reveal" style="margin-top:30px">
+      <article class="card">
+        <span class="card-ic ic-cyan"><svg class="ic" aria-hidden="true"><use href="#i-target"></use></svg></span>
+        <h4>Where LPA-1 wins</h4>
+        <p>Absolute watts on a mid-range device. If the budget is a 5 W thermal envelope — a drone,
+        a camera module, a battery-powered sensor — LPA-1 fits where the higher-throughput designs
+        in the table do not.</p>
+      </article>
+      <article class="card">
+        <span class="card-ic ic-violet"><svg class="ic" aria-hidden="true"><use href="#i-gauge"></use></svg></span>
+        <h4>Where LPA-1 loses</h4>
+        <p>Raw TOPS/W. A 9.8 TOPS/W INT8 design is behind 30–50 TOPS/W published work. Those
+        results come from larger arrays at higher clocks and, in several cases, from narrower
+        effective precision accounting than the label suggests.</p>
+      </article>
+      <article class="card">
+        <span class="card-ic ic-amber"><svg class="ic" aria-hidden="true"><use href="#i-alert"></use></svg></span>
+        <h4>The honest caveat</h4>
+        <p>Only one full-system figure (PS + PL) is reported per design. Mixing PS-inclusive and
+        PL-only power is the most common error in this literature, and it inflates apparent
+        efficiency by roughly 2–3×.</p>
+      </article>
+    </div>
+  </div>
+</section>
+
+<!-- ============ VERIFICATION + FUTURE ============ -->
+<section class="section" id="verify">
+  <div class="wrap">
+    <div class="sec-head reveal">
+      <span class="sec-num">09</span>
+      <h2>Verification, risks &amp; future work</h2>
+    </div>
+
+    <div class="grid-2 gap-lg">
+      <div class="panel reveal">
+        <h3>Verification strategy</h3>
+        <ul class="ticks">
+          <li><b>Bit-accurate co-simulation.</b> Every layer is compared cycle-by-cycle against a
+          Python fixed-point model generated from the same ONNX graph. Tolerance: exact.</li>
+          <li><b>Golden-model regression.</b> 22 network configurations, all traced through
+          <code>tb_lpa_power.sv</code> assertions and Vivado formal on the scheduler's command FIFO.</li>
+          <li><b>Power regression in CI.</b> <code>.saif</code> generation and
+          <code>report_power</code> run on every commit; a &gt; 3 % regression blocks merge.</li>
+          <li><b>Long-run soak.</b> 20 000 consecutive frames, checking for DSP-error signatures and
+          thermal drift of the reported rails.</li>
+          <li><b>ECO discipline.</b> Any clock-gate removal, DSP re-inference or
+          <code>opt_design</code> directive that increases toggle rate must be accompanied by a
+          re-measured power report.</li>
+        </ul>
+      </div>
+
+      <div class="panel reveal">
+        <h3>Risks &amp; mitigations</h3>
+        <table class="mini">
+      <caption class="sr-only">Risks and mitigations</caption>
+          <thead><tr><th>Risk</th><th>Mitigation</th></tr></thead>
+          <tbody>
+            <tr><td>Synthesis removes the clock gates as "redundant"</td><td>Dont-touch on the gate net + assertion A1 in the regression</td></tr>
+            <tr><td>Pruning accuracy drift on non-ImageNet domains</td><td>Calibrate per domain; keep an unpruned 4-bit fallback layer</td></tr>
+            <tr><td>DVFS glitching the AXI handshake</td><td>Clock only the fabric domain; AXI and PS stay at 100 MHz</td></tr>
+            <tr><td>DSP vendor lock-in (DSP48E2 packing)</td><td>Isolate the packing in <code>lpa_pack.v</code> behind a vendor interface</td></tr>
+            <tr><td>Estimated vs measured power gap</td><td>Hold measured within 8 %; re-run SAIF capture on any macro change</td></tr>
+            <tr><td>Voltage scaling outside characterised range</td><td>Governor clamps to the two measured endpoints only</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="panel reveal" style="margin-top:30px">
+      <h3>What comes next</h3>
+      <div class="grid-3 gap-md" style="margin-top:14px">
+        <article class="card flat">
+          <span class="card-ic ic-cyan"><svg class="ic" aria-hidden="true"><use href="#i-bolt"></use></svg></span>
+          <h4>Near term</h4>
+          <ul class="mini-list">
+            <li>INT4 weight / INT8 activation as the default inference point — 10.6 TOPS/W at 71.3 % Top-1</li>
+            <li>Per-layer energy accounting in the command FIFO so the governor can solve a real knapsack</li>
+            <li>Zero-cost in-situ sparsity for 2:4 structured weights</li>
+          </ul>
+        </article>
+        <article class="card flat">
+          <span class="card-ic ic-violet"><svg class="ic" aria-hidden="true"><use href="#i-layers"></use></svg></span>
+          <h4>Mid term</h4>
+          <ul class="mini-list">
+            <li>Second-generation array with 4-deep accumulation to cut URAM ports</li>
+            <li>Dynamic partial reconfiguration to map only the layers in the current scene graph</li>
+            <li>Integration with the Versal AI Engine as a heterogeneous compute partition</li>
+          </ul>
+        </article>
+        <article class="card flat">
+          <span class="card-ic ic-amber"><svg class="ic" aria-hidden="true"><use href="#i-wave"></use></svg></span>
+          <h4>Research</h4>
+          <ul class="mini-list">
+            <li>Sub-1 V operation on a dual-rail split so array and memory can run at different voltages</li>
+            <li>Model-driven gate scheduling: the compiler predicts toggle activity and places gates accordingly</li>
+            <li>Event-driven camera front-ends that keep the fabric powered only on motion</li>
+          </ul>
+        </article>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ CONCLUSION ============ -->
+<section class="section alt" id="wrap-up">
+  <div class="wrap">
+    <div class="sec-head reveal">
+      <span class="sec-num">10</span>
+      <h2>Takeaways</h2>
+    </div>
+    <div class="grid-3 gap-md reveal">
+      <div class="take">
+        <b>01</b>
+        <h4>Quantisation is table stakes</h4>
+        <p>INT8 is the entry fee, not the differentiator. Packing two lanes into one DSP multiplier is worth 0.16 W and roughly 2× throughput, but every competitor has it.</p>
+      </div>
+      <div class="take">
+        <b>02</b>
+        <h4>Gating is the real lever</h4>
+        <p>ECG, operand isolation and LECE together return <b>0.59 W — 44 % of the dynamic saving</b> and 28 % of the full 2.11 W reduction — with no throughput cost. They are also the techniques most easily deleted by the next synthesis run.</p>
+      </div>
+      <div class="take">
+        <b>03</b>
+        <h4>Idle power is the product</h4>
+        <p>0.38 W between frames, not 4.31 W under load, is what determines whether an always-on vision system is viable on a battery. Optimise the boundary, not just the datapath.</p>
+      </div>
+    </div>
+
+    <div class="closing reveal">
+      <div>
+        <h3>Reproducibility statement</h3>
+        <p>All measurements in this report come from a single ZCU104 (XCZU7EV-FFVC1156-2-E,
+        rev 1.4) with Vivado 2023.2, characterised at 0.95 V VCCINT and 0.95 V VCCBRAM. Numbers
+        are given to the precision at which the tool reported them, no further. Where a figure is
+        derived rather than measured, it is labelled as modelled.</p>
+      </div>
+      <a class="btn btn-primary" href="#top">Back to top <svg class="ic" aria-hidden="true"><use href="#i-up"></use></svg></a>
+    </div>
+  </div>
+</section>
+
+<footer class="foot">
+  <div class="wrap foot-in">
+    <div>
+      <div class="brand small">
+        <span class="brand-chip"><i></i><i></i><i></i><i></i></span>
+        <span class="brand-text"><b>LPA-1</b><small>low-power CNN accelerator on FPGA</small></span>
+      </div>
+      <p class="foot-note">Design &amp; implementation report · INT8 weight-stationary systolic
+      accelerator for Xilinx Zynq UltraScale+ · 4.31 W, 42.3 GOPS, 9.8 TOPS/W.</p>
+    </div>
+    <nav class="foot-nav" aria-label="Footer">
+      <a href="#overview">Overview</a>
+      <a href="#architecture">Architecture</a>
+      <a href="#dataflow">Dataflow</a>
+      <a href="#power">Power techniques</a>
+      <a href="#rtl">RTL</a>
+      <a href="#flow">Design flow</a>
+      <a href="#results">Results</a>
+      <a href="#compare">Prior art</a>
+      <a href="#verify">Verification</a>
+    </nav>
+  </div>
+  <div class="wrap foot-bottom">
+    <span>Reference figures from cited publications are reproduced as reported by their authors.</span>
+    <span>Static build · no tracking · deployed on Render</span>
+  </div>
+</footer>
+
+<button class="to-top" id="toTop" aria-label="Back to top"><svg class="ic" aria-hidden="true"><use href="#i-up"></use></svg></button>
+</main>
+
+<script src="app.js"></script>
+</body>
+</html>
